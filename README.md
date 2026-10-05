@@ -1,26 +1,43 @@
 # cmp-biometrics
 
-[![JitPack](https://jitpack.io/v/govindtank/cmp-biometrics.svg)](https://jitpack.io/#govindtank/cmp-biometrics)
+<p align="center">
+  <a href="https://jitpack.io/#govindtank/cmp-biometrics"><img src="https://jitpack.io/v/govindtank/cmp-biometrics.svg?style=flat-square" alt="JitPack"></a>
+  <a href="https://github.com/govindtank/cmp-biometrics/actions"><img src="https://img.shields.io/github/actions/workflow/status/govindtank/cmp-biometrics/build.yml?branch=main&style=flat-square&label=build" alt="Build Status"></a>
+  <img src="https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20CMP-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Kotlin-2.0.0-purple?style=flat-square" alt="Kotlin">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/govindtank"><img src="https://img.shields.io/badge/Author-Govind%20Tank-orange?style=flat-square" alt="Author"></a>
+</p>
 
-**Compose Multiplatform unified Biometrics (Face ID, Touch ID, Android BiometricPrompt).**
+<p align="center">
+  <b>Unified Face ID, Touch ID, and Android BiometricPrompt for Compose Multiplatform.</b><br>
+  <i>Architected &amp; Crafted with ❤️ by <a href="https://github.com/govindtank">Govind Tank</a></i>
+</p>
 
-A lightweight, multiplatform library that allows Compose Multiplatform applications to seamlessly query biometric hardware and trigger biometric authentication dialogs across Android and iOS with a single unified Kotlin API.
+<p align="center">
+  <img src="./screenshot.svg" width="800" alt="cmp-biometrics Architecture & Visual Overview" style="border-radius: 14px;" />
+</p>
 
 ---
 
-## Features
+## ⚡ Why `cmp-biometrics`?
 
-- 📱 **Unified API**: One declarative Composable & Manager API for Android and iOS.
-- 🔒 **Biometric Detection**: Distinguish between Face ID, Touch ID / Fingerprint, Iris, and multi-hardware enrollments.
-- 🛡️ **Device Fallback**: Optional fallback to PIN/Pattern/Password device credentials when biometrics are unavailable.
-- ⚡ **Coroutines & Compose**: Direct `suspend` invocation or asynchronous callback handling with `rememberBiometricManager()`.
-- 🛠️ **Zero Boilerplate**: Pre-configured error classification (`Success`, `UserCanceled`, `Lockout`, `NotAvailable`, `Failed`).
+Handling biometric authentication across Android and iOS in Compose Multiplatform previously required cumbersome platform channel bridges, disparate callbacks, and tedious lifecycle management:
+
+- 📱 **Android**: Requires bridging `androidx.biometric.BiometricPrompt`, `FragmentActivity` references, and handling subtle API 28/29/30+ hardware variations.
+- 🍏 **iOS**: Requires configuring `LocalAuthentication` `LAContext`, dealing with Objective-C blocks, and handling error codes like `LAErrorUserCancel` vs `LAErrorBiometryLockout`.
+
+`cmp-biometrics` abstracts all platform quirks into **one idiomatic Kotlin Compose API**:
+- 🔒 **Biometric Detection**: Queries hardware type (`FACE`, `FINGERPRINT`, `IRIS`, `MULTIPLE`).
+- 🛡️ **Device Credential Fallback**: Optional fallback to PIN/Pattern/Passcode.
+- 🚀 **Suspend & Callback APIs**: Native coroutines with `BiometricResult` sealed classes.
+- 🪶 **Zero Unnecessary Dependencies**: Pure Kotlin Multiplatform + AndroidX Biometric + iOS LocalAuthentication.
 
 ---
 
-## Installation
+## 📦 Installation
 
-Add JitPack repository and the dependency to your `build.gradle.kts`:
+Add the JitPack repository and dependency to your `build.gradle.kts`:
 
 ```kotlin
 repositories {
@@ -34,16 +51,23 @@ dependencies {
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Android Initialization (in your MainActivity)
+### 1. Android Initialization (`MainActivity.kt`)
+
+Initialize the biometric context inside your activity's `onCreate`:
 
 ```kotlin
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import io.github.govindtank.biometrics.biometricInit
 
-class MainActivity : FragmentActivity() { // or ComponentActivity
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize once with Activity context
         biometricInit(this)
 
         setContent {
@@ -53,38 +77,41 @@ class MainActivity : FragmentActivity() { // or ComponentActivity
 }
 ```
 
-### 2. Compose Usage
+### 2. Compose UI Usage
 
 ```kotlin
-import androidx.compose.runtime.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import io.github.govindtank.biometrics.*
 
 @Composable
 fun SecureVaultScreen() {
     val biometricManager = rememberBiometricManager()
-    var statusText by remember { mutableStateOf("Tap to Authenticate") }
+    var statusText by remember { mutableStateOf("Tap button to authenticate") }
 
     Button(onClick = {
         val availability = biometricManager.checkAvailability()
         if (availability == BiometricAvailability.AVAILABLE) {
             biometricManager.authenticate(
                 BiometricPromptConfig(
-                    title = "Unlock Your Vault",
+                    title = "Unlock Secure Vault",
                     subtitle = "Verify your identity to proceed",
-                    negativeButtonText = "Cancel"
+                    description = "Use Face ID or Fingerprint to unlock your credentials.",
+                    negativeButtonText = "Cancel",
+                    allowDeviceCredential = true // Allows PIN/Passcode fallback
                 )
             ) { result ->
                 statusText = when (result) {
                     is BiometricResult.Success -> "Unlocked Successfully! 🎉"
-                    is BiometricResult.UserCanceled -> "Authentication cancelled"
-                    is BiometricResult.Lockout -> "Too many failed attempts. Locked."
+                    is BiometricResult.UserCanceled -> "Authentication cancelled by user."
+                    is BiometricResult.Lockout -> "Temporary lockout due to too many attempts."
+                    is BiometricResult.NotAvailable -> "Biometric hardware not available."
                     is BiometricResult.Error -> "Error: ${result.message}"
-                    else -> "Authentication failed"
+                    is BiometricResult.Failed -> "Authentication failed. Try again."
                 }
             }
         } else {
-            statusText = "Biometrics not available: $availability"
+            statusText = "Biometrics unavailable: $availability"
         }
     }) {
         Text("Authenticate with Biometrics")
@@ -96,18 +123,18 @@ fun SecureVaultScreen() {
 
 ---
 
-## Platform Hardware Support
+## 📱 Platform Hardware Support Matrix
 
-| Platform | Native Mechanism | Supported Types |
+| Platform | Native Mechanism | Supported Hardware & Fallbacks |
 | :--- | :--- | :--- |
-| **Android** | `androidx.biometric.BiometricPrompt` | Fingerprint, Face Unlock, Iris Scan, PIN/Pattern fallback |
-| **iOS** | `LocalAuthentication.framework` (LAContext) | Face ID, Touch ID, Optic ID, Passcode fallback |
+| **Android** | `androidx.biometric.BiometricPrompt` | Fingerprint, Face Unlock, Iris Scan, PIN / Pattern / Password |
+| **iOS** | `LocalAuthentication.framework` (LAContext) | Face ID, Touch ID, Optic ID (Apple Vision), Device Passcode |
 
 ---
 
-## iOS Permission Configuration
+## 🛠️ iOS Configuration
 
-In your iOS application's `Info.plist`, ensure you include `NSFaceIDUsageDescription`:
+Add `NSFaceIDUsageDescription` to your iOS app's `Info.plist`:
 
 ```xml
 <key>NSFaceIDUsageDescription</key>
@@ -116,6 +143,41 @@ In your iOS application's `Info.plist`, ensure you include `NSFaceIDUsageDescrip
 
 ---
 
-## License
+## 💖 Support & Sponsorship
 
-Apache License 2.0
+If you find this library helpful for your Compose Multiplatform applications, consider supporting continuous development and maintenance:
+
+<p align="left">
+  <a href="https://www.patreon.com/govindtank"><img src="https://img.shields.io/badge/Patreon-Support%20Creator-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Patreon"></a>
+  <a href="https://github.com/sponsors/govindtank"><img src="https://img.shields.io/badge/GitHub%20Sponsors-Sponsor-EA4AAA?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Sponsors"></a>
+  <a href="https://buymeacoffee.com/govindtank"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
+</p>
+
+- **Patreon**: [patreon.com/govindtank](https://www.patreon.com/govindtank)
+- **GitHub Sponsors**: [github.com/sponsors/govindtank](https://github.com/sponsors/govindtank)
+- **Buy Me a Coffee**: [buymeacoffee.com/govindtank](https://buymeacoffee.com/govindtank)
+
+Your sponsorship fuels new features, bug fixes, and continuous KMP multiplatform library releases!
+
+---
+
+## 👨💻 Author
+
+**Govind Tank**
+- **GitHub**: [@govindtank](https://github.com/govindtank)
+- **Website**: [govindtank.github.io](https://govindtank.github.io)
+- **LinkedIn**: [linkedin.com/in/govind-tank](https://linkedin.com/in/govind-tank)
+
+---
+
+## 📄 License
+
+```
+Copyright 2026 Govind Tank
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+```
